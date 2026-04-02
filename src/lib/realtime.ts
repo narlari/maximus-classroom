@@ -12,8 +12,10 @@ export type RealtimeController = {
 };
 
 type ConnectOptions = {
+  studentId: string;
   onStatusChange: (status: SessionStatus) => void;
   onError: (message: string) => void;
+  onUserTranscript?: (transcript: string) => void;
   onAssistantTranscript?: (transcript: string) => void;
 };
 
@@ -39,6 +41,12 @@ export async function connectRealtimeSession(
 
     const tokenResponse = await fetch("/api/realtime/session", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        studentId: options.studentId,
+      }),
     });
 
     const tokenData = (await tokenResponse.json()) as SessionResponse;
@@ -89,6 +97,12 @@ export async function connectRealtimeSession(
         type?: string;
         transcript?: string;
         text?: string;
+        item?: {
+          content?: Array<{
+            transcript?: string;
+            text?: string;
+          }>;
+        };
         response?: {
           output?: Array<{
             content?: Array<{
@@ -103,6 +117,7 @@ export async function connectRealtimeSession(
       const transcript =
         payload.transcript ??
         payload.text ??
+        payload.item?.content?.map((content) => content.transcript ?? content.text ?? "").join(" ").trim() ??
         payload.response?.output
           ?.flatMap((item) => item.content ?? [])
           .map((content) => content.transcript ?? content.text ?? "")
@@ -118,6 +133,10 @@ export async function connectRealtimeSession(
       ) {
         lastAssistantTranscript = transcript;
         options.onAssistantTranscript?.(transcript);
+      }
+
+      if (transcript && payload.type === "conversation.item.input_audio_transcription.completed") {
+        options.onUserTranscript?.(transcript);
       }
 
       if (
