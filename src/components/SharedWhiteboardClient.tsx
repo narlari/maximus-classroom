@@ -43,6 +43,7 @@ type Props = {
   sessionActive: boolean;
   tutorTranscript: string | null;
   onStudentDrawingDescription: (description: string) => void;
+  onStudentActivity?: () => void;
 };
 
 const TOOL_OPTIONS: Array<{ id: WhiteboardTool; label: string; icon: string }> = [
@@ -73,6 +74,7 @@ export function SharedWhiteboardClient({
   sessionActive,
   tutorTranscript,
   onStudentDrawingDescription,
+  onStudentActivity,
 }: Props) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const historyRef = useRef<SceneSnapshot[]>([{ elements: [] }]);
@@ -296,6 +298,7 @@ export function SharedWhiteboardClient({
     }
 
     if (sceneHash !== lastSceneHashRef.current) {
+      onStudentActivity?.();
       historyRef.current.push({
         elements: visibleElements,
       });

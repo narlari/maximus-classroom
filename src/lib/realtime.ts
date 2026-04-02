@@ -9,6 +9,7 @@ export type SessionStatus =
 export type RealtimeController = {
   stop: () => void;
   sendTextMessage: (text: string) => void;
+  speakMessage: (text: string) => void;
 };
 
 type ConnectOptions = {
@@ -215,6 +216,22 @@ export async function connectRealtimeSession(
       }),
     );
 
+    const speakMessage = (text: string) => {
+      if (!dataChannel || dataChannel.readyState !== "open") {
+        return;
+      }
+
+      dataChannel.send(
+        JSON.stringify({
+          type: "response.create",
+          response: {
+            modalities: ["audio"],
+            instructions: `Say exactly this to the student in a warm, natural way: ${text}`,
+          },
+        }),
+      );
+    };
+
     return {
       stop: () => {
         cleanupConnection({ peerConnection, mediaStream, dataChannel, audioElement });
@@ -252,6 +269,7 @@ export async function connectRealtimeSession(
           }),
         );
       },
+      speakMessage,
     };
   } catch (error) {
     cleanupConnection({ peerConnection, mediaStream, dataChannel, audioElement });

@@ -8,6 +8,7 @@ type StudentRow = {
   name: string;
   grade_level: number;
   avatar_id: string;
+  max_session_minutes: number;
   created_at: string;
 };
 
@@ -17,6 +18,7 @@ type SessionRow = {
   started_at: string;
   ended_at: string | null;
   duration_minutes: number | null;
+  end_reason: string | null;
   summary: string | null;
   topics_covered: string | null;
   performance_notes: string | null;
@@ -39,6 +41,8 @@ type SessionEventRow = {
   event_type: string;
   content: string | null;
   metadata: string | null;
+  flagged: number;
+  flag_reason: string | null;
   timestamp: string;
 };
 
@@ -47,6 +51,7 @@ export type Student = {
   name: string;
   gradeLevel: number;
   avatarId: string;
+  maxSessionMinutes: number;
   createdAt: string;
 };
 
@@ -56,6 +61,7 @@ export type Session = {
   startedAt: string;
   endedAt: string | null;
   durationMinutes: number | null;
+  endReason: string | null;
   summary: string | null;
   topicsCovered: string[];
   performanceNotes: string | null;
@@ -78,6 +84,8 @@ export type SessionEvent = {
   eventType: string;
   content: string | null;
   metadata: Record<string, unknown> | null;
+  flagged: boolean;
+  flagReason: string | null;
   timestamp: string;
 };
 
@@ -88,6 +96,26 @@ export type StudentCard = Student & {
 export type StudentProfile = {
   student: Student;
   recentSessions: Session[];
+};
+
+export type ParentDashboardStudent = {
+  student: Student;
+  totalSessions: number;
+  lastSession: Session | null;
+  recentSessions: Array<Session & { events: SessionEvent[] }>;
+  progressByDomain: Array<{
+    domain: string;
+    skills: SkillProgress[];
+  }>;
+  flaggedEvents: SessionEvent[];
+};
+
+export type ParentDashboard = {
+  students: ParentDashboardStudent[];
+  costs: {
+    weekCents: number;
+    monthCents: number;
+  };
 };
 
 export type SkillSeed = {
@@ -160,6 +188,7 @@ function toStudent(row: StudentRow): Student {
     name: row.name,
     gradeLevel: row.grade_level,
     avatarId: row.avatar_id,
+    maxSessionMinutes: row.max_session_minutes,
     createdAt: row.created_at,
   };
 }
@@ -171,6 +200,7 @@ function toSession(row: SessionRow): Session {
     startedAt: row.started_at,
     endedAt: row.ended_at,
     durationMinutes: row.duration_minutes,
+    endReason: row.end_reason,
     summary: row.summary,
     topicsCovered: parseJsonArray(row.topics_covered),
     performanceNotes: row.performance_notes,
@@ -197,8 +227,50 @@ function toSessionEvent(row: SessionEventRow): SessionEvent {
     eventType: row.event_type,
     content: row.content,
     metadata: parseMetadata(row.metadata),
+    flagged: Boolean(row.flagged),
+    flagReason: row.flag_reason,
     timestamp: row.timestamp,
   };
+}
+
+function getDomainName(standardCode: string) {
+  const domainCode = standardCode.split(".")[1] ?? "";
+  const domainMap: Record<string, string> = {
+    OA: "Operations",
+    NBT: "Number & Base Ten",
+    NF: "Fractions",
+    G: "Geometry",
+    MD: "Measurement",
+  };
+
+  return domainMap[domainCode] ?? "Other";
+}
+
+function ensureColumn(db: Database.Database, tableName: string, columnName: string, definition: string) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
+function detectFlag(content?: string | null, metadata?: Record<string, unknown> | null) {
+  const normalized = content?.toLowerCase() ?? "";
+  const speaker = typeof metadata?.speaker === "string" ? metadata.speaker.toLowerCase() : "";
+
+  if (speaker !== "student") {
+    return { flagged: false, reason: null as string | null };
+  }
+
+  if (/(ignore your instructions|ignore your rules|pretend you are|system prompt|jailbreak)/i.test(normalized)) {
+    return { flagged: true, reason: "Guardrail challenge / jailbreak attempt" };
+  }
+
+  if (/(hurt|scared|afraid|unsafe|bleeding|hit me|someone hit|don't feel safe|emergency|help me)/i.test(normalized)) {
+    return { flagged: true, reason: "Concerning student statement" };
+  }
+
+  return { flagged: false, reason: null as string | null };
 }
 
 function initializeDatabase(db: Database.Database) {
@@ -208,6 +280,7 @@ function initializeDatabase(db: Database.Database) {
       name TEXT NOT NULL,
       grade_level INTEGER NOT NULL,
       avatar_id TEXT DEFAULT 'default',
+      max_session_minutes INTEGER DEFAULT 30,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -217,6 +290,7 @@ function initializeDatabase(db: Database.Database) {
       started_at TEXT DEFAULT (datetime('now')),
       ended_at TEXT,
       duration_minutes INTEGER,
+      end_reason TEXT,
       summary TEXT,
       topics_covered TEXT,
       performance_notes TEXT,
@@ -240,9 +314,16 @@ function initializeDatabase(db: Database.Database) {
       event_type TEXT NOT NULL,
       content TEXT,
       metadata TEXT,
+      flagged INTEGER DEFAULT 0,
+      flag_reason TEXT,
       timestamp TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  ensureColumn(db, "students", "max_session_minutes", "INTEGER DEFAULT 30");
+  ensureColumn(db, "sessions", "end_reason", "TEXT");
+  ensureColumn(db, "session_events", "flagged", "INTEGER DEFAULT 0");
+  ensureColumn(db, "session_events", "flag_reason", "TEXT");
 
   const seedStudents = db.prepare(`
     INSERT OR IGNORE INTO students (id, name, grade_level)
@@ -374,6 +455,22 @@ export function getStudentProgress(studentId: string): SkillProgress[] {
   return rows.map((row) => toSkillProgress(row));
 }
 
+export function getSessionCountToday(studentId: string) {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `
+      SELECT COUNT(*) AS count
+      FROM sessions
+      WHERE student_id = ?
+        AND date(started_at) = date('now')
+    `,
+    )
+    .get(studentId) as { count: number };
+
+  return row.count;
+}
+
 export function createSession(studentId: string): Session {
   const db = getDb();
   const id = uuidv4();
@@ -430,10 +527,11 @@ export function logSessionEvent(input: {
 }) {
   const db = getDb();
   const id = uuidv4();
+  const flag = detectFlag(input.content, input.metadata);
   db.prepare(
     `
-    INSERT INTO session_events (id, session_id, event_type, content, metadata)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO session_events (id, session_id, event_type, content, metadata, flagged, flag_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     id,
@@ -441,6 +539,8 @@ export function logSessionEvent(input: {
     input.eventType,
     input.content ?? null,
     input.metadata ? JSON.stringify(input.metadata) : null,
+    flag.flagged ? 1 : 0,
+    flag.reason,
   );
 
   const row = db.prepare("SELECT * FROM session_events WHERE id = ?").get(id) as SessionEventRow | undefined;
@@ -456,6 +556,7 @@ export function updateSessionDetails(input: {
   sessionId: string;
   endedAt?: string | null;
   durationMinutes?: number | null;
+  endReason?: string | null;
   summary?: string | null;
   topicsCovered?: string[] | null;
   performanceNotes?: string | null;
@@ -469,6 +570,7 @@ export function updateSessionDetails(input: {
     SET
       ended_at = COALESCE(@ended_at, ended_at),
       duration_minutes = COALESCE(@duration_minutes, duration_minutes),
+      end_reason = COALESCE(@end_reason, end_reason),
       summary = COALESCE(@summary, summary),
       topics_covered = COALESCE(@topics_covered, topics_covered),
       performance_notes = COALESCE(@performance_notes, performance_notes),
@@ -479,6 +581,7 @@ export function updateSessionDetails(input: {
     session_id: input.sessionId,
     ended_at: input.endedAt ?? null,
     duration_minutes: input.durationMinutes ?? null,
+    end_reason: input.endReason ?? null,
     summary: input.summary ?? null,
     topics_covered: input.topicsCovered ? JSON.stringify(input.topicsCovered) : null,
     performance_notes: input.performanceNotes ?? null,
@@ -486,6 +589,88 @@ export function updateSessionDetails(input: {
   });
 
   return getSessionById(input.sessionId);
+}
+
+export function getParentDashboard(): ParentDashboard {
+  const students = listStudents().map((studentCard) => {
+    const student = getStudentById(studentCard.id);
+
+    if (!student) {
+      throw new Error(`Student ${studentCard.id} not found.`);
+    }
+
+    const recentSessions = getRecentSessions(student.id, 12).filter((session) => session.endedAt).slice(0, 10);
+    const progress = getStudentProgress(student.id);
+    const flaggedEvents = getDb()
+      .prepare(
+        `
+        SELECT session_events.*
+        FROM session_events
+        INNER JOIN sessions ON sessions.id = session_events.session_id
+        WHERE sessions.student_id = ?
+          AND session_events.flagged = 1
+        ORDER BY datetime(session_events.timestamp) DESC
+        LIMIT 10
+      `,
+      )
+      .all(student.id) as SessionEventRow[];
+
+    const progressByDomain = progress.reduce<Array<{ domain: string; skills: SkillProgress[] }>>((groups, skill) => {
+      const domain = getDomainName(skill.standardCode);
+      const existingGroup = groups.find((entry) => entry.domain === domain);
+
+      if (existingGroup) {
+        existingGroup.skills.push(skill);
+        return groups;
+      }
+
+      groups.push({ domain, skills: [skill] });
+      return groups;
+    }, []);
+
+    return {
+      student,
+      totalSessions: (
+        getDb()
+          .prepare("SELECT COUNT(*) AS count FROM sessions WHERE student_id = ? AND ended_at IS NOT NULL")
+          .get(student.id) as { count: number }
+      ).count,
+      lastSession: recentSessions[0] ?? null,
+      recentSessions: recentSessions.map((session) => ({
+        ...session,
+        events: getSessionEvents(session.id),
+      })),
+      progressByDomain,
+      flaggedEvents: flaggedEvents.map((row) => toSessionEvent(row)),
+    };
+  });
+
+  const weekRow = getDb()
+    .prepare(
+      `
+      SELECT COALESCE(SUM(api_cost_cents), 0) AS total
+      FROM sessions
+      WHERE datetime(started_at) >= datetime('now', '-7 days')
+    `,
+    )
+    .get() as { total: number };
+  const monthRow = getDb()
+    .prepare(
+      `
+      SELECT COALESCE(SUM(api_cost_cents), 0) AS total
+      FROM sessions
+      WHERE datetime(started_at) >= datetime('now', '-30 days')
+    `,
+    )
+    .get() as { total: number };
+
+  return {
+    students,
+    costs: {
+      weekCents: weekRow.total,
+      monthCents: monthRow.total,
+    },
+  };
 }
 
 export function applySkillUpdates(studentId: string, updates: SkillUpdateInput[]) {
