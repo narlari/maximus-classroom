@@ -21,29 +21,26 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as SessionRequest;
     const instructions = buildStudentRealtimeInstructions(body.studentId ?? "");
 
-    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+    const response = await fetch("https://api.openai.com/v1/realtime/sessions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        session: {
-          type: "realtime",
-          model: "gpt-realtime",
-          instructions,
-          audio: {
-            input: {
-              turn_detection: {
-                type: "server_vad",
-                create_response: true,
-                interrupt_response: true,
-              },
-            },
-            output: {
-              voice: "alloy",
-            },
-          },
+        model: "gpt-4o-realtime-preview",
+        voice: "alloy",
+        instructions,
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500,
+          create_response: true,
+          interrupt_response: true,
+        },
+        input_audio_transcription: {
+          model: "gpt-4o-mini-transcribe",
         },
       }),
       cache: "no-store",
@@ -64,8 +61,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        value: data.value ?? data.client_secret?.value ?? null,
-        expires_at: data.expires_at ?? data.client_secret?.expires_at ?? null,
+        value: data.client_secret?.value ?? data.value ?? null,
+        expires_at: data.client_secret?.expires_at ?? data.expires_at ?? null,
       },
       { status: 200 },
     );
