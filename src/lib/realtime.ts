@@ -27,6 +27,31 @@ type SessionResponse = {
   details?: string;
 };
 
+type RealtimeContentPart = {
+  transcript?: string;
+  text?: string;
+};
+
+type RealtimeEventPayload = {
+  type?: string;
+  transcript?: string;
+  text?: string;
+  error?: {
+    code?: string;
+    message?: string;
+    type?: string;
+    event_id?: string;
+  };
+  item?: {
+    content?: RealtimeContentPart[];
+  };
+  response?: {
+    output?: Array<{
+      content?: RealtimeContentPart[];
+    }>;
+  };
+};
+
 export async function connectRealtimeSession(
   options: ConnectOptions,
 ): Promise<RealtimeController> {
@@ -54,7 +79,8 @@ export async function connectRealtimeSession(
     const ephemeralKey = tokenData.value;
 
     if (!tokenResponse.ok || !ephemeralKey) {
-      throw new Error(tokenData.details || tokenData.error || "Failed to fetch session token.");
+      const detail = tokenData.details || tokenData.error || "No token returned by the server.";
+      throw new Error(`Unable to start voice session: ${detail}`);
     }
 
     peerConnection = new RTCPeerConnection();
@@ -94,26 +120,16 @@ export async function connectRealtimeSession(
 
     dataChannel = peerConnection.createDataChannel("oai-events");
     dataChannel.addEventListener("message", (event) => {
-      const payload = JSON.parse(event.data) as {
-        type?: string;
-        transcript?: string;
-        text?: string;
-        item?: {
-          content?: Array<{
-            transcript?: string;
-            text?: string;
-          }>;
-        };
-        response?: {
-          output?: Array<{
-            content?: Array<{
-              type?: string;
-              text?: string;
-              transcript?: string;
-            }>;
-          }>;
-        };
-      };
+      let payload: RealtimeEventPayload;
+
+      try {
+        payload = JSON.parse(event.data) as RealtimeEventPayload;
+      } catch {
+        console.error("[Realtime] Invalid data channel payload:", event.data);
+        options.onError("Received an unreadable message from the voice session.");
+        options.onStatusChange("error");
+        return;
+      }
 
       const transcript =
         payload.transcript ??
@@ -128,6 +144,7 @@ export async function connectRealtimeSession(
       if (
         transcript &&
         (payload.type === "response.audio_transcript.done" ||
+          payload.type === "response.output_audio_transcript.done" ||
           payload.type === "response.output_text.done" ||
           payload.type === "response.done") &&
         transcript !== lastAssistantTranscript
@@ -142,6 +159,7 @@ export async function connectRealtimeSession(
 
       if (
         payload.type === "response.created" ||
+        payload.type === "response.output_item.created" ||
         payload.type === "response.output_item.added" ||
         payload.type === "response.content_part.added"
       ) {
@@ -152,7 +170,9 @@ export async function connectRealtimeSession(
       if (
         payload.type === "output_audio_buffer.started" ||
         payload.type === "response.audio.delta" ||
-        payload.type === "response.audio_transcript.delta"
+        payload.type === "response.output_audio.delta" ||
+        payload.type === "response.audio_transcript.delta" ||
+        payload.type === "response.output_audio_transcript.delta"
       ) {
         options.onStatusChange("speaking");
         return;
@@ -160,6 +180,8 @@ export async function connectRealtimeSession(
 
       if (
         payload.type === "output_audio_buffer.stopped" ||
+        payload.type === "response.audio.done" ||
+        payload.type === "response.output_audio.done" ||
         payload.type === "response.done" ||
         payload.type === "input_audio_buffer.committed"
       ) {
@@ -168,9 +190,16 @@ export async function connectRealtimeSession(
       }
 
       if (payload.type === "error") {
-        options.onError("Realtime session error.");
+        const errMsg = formatRealtimeError(payload);
+        console.error("[Realtime] Error event:", errMsg);
+        options.onError(errMsg);
         options.onStatusChange("error");
       }
+    });
+
+    dataChannel.addEventListener("error", () => {
+      options.onError("The voice session connection ran into a data channel error.");
+      options.onStatusChange("error");
     });
 
     const offer = await peerConnection.createOffer();
@@ -183,7 +212,7 @@ export async function connectRealtimeSession(
       throw new Error("Missing local WebRTC offer.");
     }
 
-    const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+    const sdpResponse = await fetch("https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview", {
       method: "POST",
       body: localSdp,
       headers: {
@@ -194,12 +223,16 @@ export async function connectRealtimeSession(
 
     if (!sdpResponse.ok) {
       const errorText = await sdpResponse.text();
-      throw new Error(errorText || "Failed to connect to OpenAI realtime.");
+      console.error("[Realtime] SDP exchange failed:", sdpResponse.status, errorText);
+      throw new Error(`Unable to connect audio to OpenAI (${sdpResponse.status}): ${errorText}`);
     }
+
+    const answerSdp = await sdpResponse.text();
+    console.log("[Realtime] Got SDP answer, length:", answerSdp.length);
 
     const answer = {
       type: "answer" as RTCSdpType,
-      sdp: await sdpResponse.text(),
+      sdp: answerSdp,
     };
 
     await peerConnection.setRemoteDescription(answer);
@@ -209,7 +242,7 @@ export async function connectRealtimeSession(
       JSON.stringify({
         type: "response.create",
         response: {
-          modalities: ["audio"],
+          modalities: ["audio", "text"],
           instructions:
             "Greet the student warmly as Maximus, introduce yourself as a math tutor, and ask what they want to work on today.",
         },
@@ -225,7 +258,7 @@ export async function connectRealtimeSession(
         JSON.stringify({
           type: "response.create",
           response: {
-            modalities: ["audio"],
+            modalities: ["audio", "text"],
             instructions: `Say exactly this to the student in a warm, natural way: ${text}`,
           },
         }),
@@ -262,7 +295,7 @@ export async function connectRealtimeSession(
           JSON.stringify({
             type: "response.create",
             response: {
-              modalities: ["audio"],
+              modalities: ["audio", "text"],
               instructions:
                 "Respond naturally to the latest whiteboard update. Keep the reply short, supportive, and focused on the student's math work.",
             },
@@ -305,6 +338,22 @@ async function waitForDataChannelOpen(dataChannel: RTCDataChannel) {
       once: true,
     });
   });
+}
+
+function formatRealtimeError(payload: RealtimeEventPayload) {
+  const error = payload.error;
+
+  if (!error) {
+    return "The voice session returned an unknown error.";
+  }
+
+  const detailParts = [error.message, error.code, error.type].filter(Boolean);
+
+  if (detailParts.length === 0) {
+    return "The voice session returned an unknown error.";
+  }
+
+  return `Voice session error: ${detailParts.join(" | ")}`;
 }
 
 function cleanupConnection({

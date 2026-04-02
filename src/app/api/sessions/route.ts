@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Student not found." }, { status: 404 });
   }
 
-  if (getSessionCountToday(body.studentId) >= 3) {
+  if (getSessionCountToday(body.studentId) >= 20) {
     return NextResponse.json(
       { error: "Daily session limit reached for this student." },
       { status: 429 },
