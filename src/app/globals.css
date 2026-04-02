@@ -18,3 +18,28 @@ body {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+.whiteboard-shell .App-toolbar,
+.whiteboard-shell .layer-ui__wrapper__top-right,
+.whiteboard-shell .layer-ui__wrapper__footer-right,
+.whiteboard-shell .layer-ui__wrapper__footer-left,
+.whiteboard-shell .help-icon,
+.whiteboard-shell .main-menu-trigger,
+.whiteboard-shell .default-sidebar-trigger,
+.whiteboard-shell .layer-ui__library {
+  display: none !important;
+}
+
+.whiteboard-shell .layer-ui__wrapper {
+  pointer-events: none;
+}
+
+.whiteboard-shell .layer-ui__wrapper .disable-zen-mode,
+.whiteboard-shell .layer-ui__wrapper .footer-center {
+  pointer-events: auto;
+}
+
+.whiteboard-shell .excalidraw {
+  --island-bg-color: rgba(255, 255, 255, 0.92);
+  --popup-bg-color: rgba(255, 255, 255, 0.96);
+}

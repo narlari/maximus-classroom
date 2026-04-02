@@ -19,6 +19,14 @@ Rules:
 
 Start by greeting the student warmly and asking what they'd like to work on today, or suggest a topic based on their grade level.`;
 
+const WHITEBOARD_INSTRUCTIONS = `
+
+You also have a shared whiteboard visible to both you and the student.
+- When explaining concepts, say things like "Let me show you on the whiteboard" or "Look at what I'm drawing"
+- You'll receive descriptions of what the student draws. Respond to their drawings: "I can see you wrote 24 - nice work!" or "Hmm, look at that number again..."
+- Encourage students to show their work on the whiteboard
+- Use visual examples: pizza slices for fractions, groups of objects for multiplication, number lines for addition`;
+
 export async function POST() {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -40,7 +48,7 @@ export async function POST() {
         session: {
           type: "realtime",
           model: "gpt-realtime",
-          instructions: TUTOR_INSTRUCTIONS,
+          instructions: `${TUTOR_INSTRUCTIONS}${WHITEBOARD_INSTRUCTIONS}`,
           audio: {
             input: {
               turn_detection: {

@@ -8,11 +8,13 @@ export type SessionStatus =
 
 export type RealtimeController = {
   stop: () => void;
+  sendTextMessage: (text: string) => void;
 };
 
 type ConnectOptions = {
   onStatusChange: (status: SessionStatus) => void;
   onError: (message: string) => void;
+  onAssistantTranscript?: (transcript: string) => void;
 };
 
 type SessionResponse = {
@@ -30,6 +32,7 @@ export async function connectRealtimeSession(
   let peerConnection: RTCPeerConnection | null = null;
   let mediaStream: MediaStream | null = null;
   let dataChannel: RTCDataChannel | null = null;
+  let lastAssistantTranscript = "";
 
   try {
     options.onStatusChange("connecting");
@@ -82,7 +85,40 @@ export async function connectRealtimeSession(
 
     dataChannel = peerConnection.createDataChannel("oai-events");
     dataChannel.addEventListener("message", (event) => {
-      const payload = JSON.parse(event.data) as { type?: string };
+      const payload = JSON.parse(event.data) as {
+        type?: string;
+        transcript?: string;
+        text?: string;
+        response?: {
+          output?: Array<{
+            content?: Array<{
+              type?: string;
+              text?: string;
+              transcript?: string;
+            }>;
+          }>;
+        };
+      };
+
+      const transcript =
+        payload.transcript ??
+        payload.text ??
+        payload.response?.output
+          ?.flatMap((item) => item.content ?? [])
+          .map((content) => content.transcript ?? content.text ?? "")
+          .join(" ")
+          .trim();
+
+      if (
+        transcript &&
+        (payload.type === "response.audio_transcript.done" ||
+          payload.type === "response.output_text.done" ||
+          payload.type === "response.done") &&
+        transcript !== lastAssistantTranscript
+      ) {
+        lastAssistantTranscript = transcript;
+        options.onAssistantTranscript?.(transcript);
+      }
 
       if (
         payload.type === "response.created" ||
@@ -164,6 +200,38 @@ export async function connectRealtimeSession(
       stop: () => {
         cleanupConnection({ peerConnection, mediaStream, dataChannel, audioElement });
         options.onStatusChange("idle");
+      },
+      sendTextMessage: (text: string) => {
+        if (!dataChannel || dataChannel.readyState !== "open") {
+          return;
+        }
+
+        dataChannel.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text,
+                },
+              ],
+            },
+          }),
+        );
+
+        dataChannel.send(
+          JSON.stringify({
+            type: "response.create",
+            response: {
+              modalities: ["audio"],
+              instructions:
+                "Respond naturally to the latest whiteboard update. Keep the reply short, supportive, and focused on the student's math work.",
+            },
+          }),
+        );
       },
     };
   } catch (error) {
