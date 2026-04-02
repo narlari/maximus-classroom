@@ -7,11 +7,13 @@ export const runtime = "nodejs";
 type UpdateSessionRequest = {
   endedAt?: string;
   durationMinutes?: number;
+  endReason?: string;
   summary?: string;
   topicsCovered?: string[];
   performanceNotes?: string;
   apiCostCents?: number;
   generateSummary?: boolean;
+  visionSnapshots?: number;
 };
 
 export async function PUT(
@@ -27,7 +29,10 @@ export async function PUT(
   const body = (await request.json().catch(() => ({}))) as UpdateSessionRequest;
 
   if (body.generateSummary) {
-    const session = await finalizeSession(params.id);
+    const session = await finalizeSession(params.id, {
+      endReason: body.endReason ?? null,
+      visionSnapshots: body.visionSnapshots ?? 0,
+    });
     return NextResponse.json(session, { status: 200 });
   }
 
@@ -35,6 +40,7 @@ export async function PUT(
     sessionId: params.id,
     endedAt: body.endedAt ?? null,
     durationMinutes: body.durationMinutes ?? null,
+    endReason: body.endReason ?? null,
     summary: body.summary ?? null,
     topicsCovered: body.topicsCovered ?? null,
     performanceNotes: body.performanceNotes ?? null,

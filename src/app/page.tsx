@@ -23,16 +23,26 @@ export default function Home() {
         <section className="relative overflow-hidden px-5 pb-8 pt-8 sm:px-8 sm:pt-10">
           <div className="absolute right-[-4rem] top-[-4rem] h-36 w-36 rounded-full bg-mango/50 blur-2xl" />
           <div className="absolute bottom-[-2rem] left-[-2rem] h-32 w-32 rounded-full bg-coral/30 blur-2xl" />
-          <div className="relative">
-            <div className="inline-flex items-center rounded-full bg-lagoon/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-lagoon">
-              Maximus Classroom
+          <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="inline-flex items-center rounded-full bg-lagoon/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-lagoon">
+                Maximus Classroom
+              </div>
+              <h1 className="mt-4 max-w-xl text-4xl font-black leading-tight text-ink sm:text-5xl">
+                Pick a student and jump back into math.
+              </h1>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-ink/75 sm:text-lg">
+                Maximus remembers past sessions, keeps skill progress in SQLite, and loads the right context before class starts.
+              </p>
             </div>
-            <h1 className="mt-4 max-w-xl text-4xl font-black leading-tight text-ink sm:text-5xl">
-              Pick a student and jump back into math.
-            </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-ink/75 sm:text-lg">
-              Maximus remembers past sessions, keeps skill progress in SQLite, and loads the right context before class starts.
-            </p>
+            <div className="mt-4">
+              <Link
+                href="/parent"
+                className="inline-flex items-center rounded-full bg-ink px-5 py-3 text-sm font-black text-white transition hover:bg-lagoon"
+              >
+                Parent dashboard
+              </Link>
+            </div>
           </div>
         </section>
 

@@ -17,19 +17,27 @@ export default function ClassroomPage({
   }
 
   return (
-    <main className="min-h-screen px-4 py-6 sm:px-6">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 shadow-bubble backdrop-blur">
-        <section className="relative overflow-hidden px-5 pb-6 pt-8 sm:px-8 sm:pt-10">
+    <main className="min-h-screen px-3 py-4 sm:px-6 sm:py-6">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 shadow-bubble backdrop-blur">
+        <section className="relative overflow-hidden px-4 pb-5 pt-6 sm:px-8 sm:pt-8">
           <div className="absolute right-[-4rem] top-[-4rem] h-36 w-36 rounded-full bg-mango/50 blur-2xl" />
           <div className="absolute bottom-[-2rem] left-[-2rem] h-32 w-32 rounded-full bg-coral/30 blur-2xl" />
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <Link
-                href="/"
-                className="inline-flex items-center rounded-full bg-lagoon/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-lagoon"
-              >
-                Student Select
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/"
+                  className="inline-flex items-center rounded-full bg-lagoon/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-lagoon"
+                >
+                  Student Select
+                </Link>
+                <Link
+                  href="/parent"
+                  className="inline-flex items-center rounded-full bg-ink px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-white"
+                >
+                  Parent Dashboard
+                </Link>
+              </div>
               <h1 className="mt-4 max-w-xl text-4xl font-black leading-tight text-ink sm:text-5xl">
                 {profile.student.name}&apos;s classroom
               </h1>
