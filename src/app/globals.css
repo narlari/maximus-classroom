@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(255, 211, 110, 0.8), transparent 26%),
+    radial-gradient(circle at 20% 20%, rgba(255, 127, 107, 0.2), transparent 20%),
+    linear-gradient(180deg, #f5feff 0%, #e6fbff 52%, #d5f2ff 100%);
+  color: #15324a;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.whiteboard-shell .App-toolbar,
+.whiteboard-shell .layer-ui__wrapper__top-right,
+.whiteboard-shell .layer-ui__wrapper__footer-right,
+.whiteboard-shell .layer-ui__wrapper__footer-left,
+.whiteboard-shell .help-icon,
+.whiteboard-shell .main-menu-trigger,
+.whiteboard-shell .default-sidebar-trigger,
+.whiteboard-shell .layer-ui__library {
+  display: none !important;
+}
+
+.whiteboard-shell .layer-ui__wrapper {
+  pointer-events: none;
+}
+
+.whiteboard-shell .layer-ui__wrapper .disable-zen-mode,
+.whiteboard-shell .layer-ui__wrapper .footer-center {
+  pointer-events: auto;
+}
+
+.whiteboard-shell .excalidraw {
+  --island-bg-color: rgba(255, 255, 255, 0.92);
+  --popup-bg-color: rgba(255, 255, 255, 0.96);
+}
