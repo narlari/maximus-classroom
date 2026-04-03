@@ -13,6 +13,7 @@ type Props = {
 
 export function SimpleCanvas({ sessionActive, tutorTranscript, onStudentDrawingDescription, onStudentActivity }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasShellRef = useRef<HTMLDivElement | null>(null);
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
   const hasContentRef = useRef(false);
@@ -70,22 +71,53 @@ export function SimpleCanvas({ sessionActive, tutorTranscript, onStudentDrawingD
     }, 5000);
   }, [sessionActive, onStudentDrawingDescription]);
 
-  // Initialize canvas resolution ONCE on mount
-  const canvasInitRef = useRef(false);
-  useEffect(() => {
+  const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || canvasInitRef.current) return;
-    canvasInitRef.current = true;
+    if (!canvas) return;
+
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
+    const nextWidth = Math.max(1, Math.floor(rect.width * 2));
+    const nextHeight = Math.max(1, Math.floor(rect.height * 2));
+
+    if (canvas.width === nextWidth && canvas.height === nextHeight) {
+      return;
+    }
+
+    const snapshot = document.createElement("canvas");
+    snapshot.width = canvas.width;
+    snapshot.height = canvas.height;
+    const snapshotContext = snapshot.getContext("2d");
+    if (snapshotContext && canvas.width > 0 && canvas.height > 0) {
+      snapshotContext.drawImage(canvas, 0, 0);
+    }
+
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.scale(2, 2);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
+      if (snapshot.width > 0 && snapshot.height > 0) {
+        ctx.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, rect.width, rect.height);
+      }
     }
   }, []);
+
+  useEffect(() => {
+    resizeCanvas();
+    const shell = canvasShellRef.current;
+    if (!shell) return;
+
+    const observer = new ResizeObserver(() => {
+      resizeCanvas();
+    });
+    observer.observe(shell);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [resizeCanvas]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -239,16 +271,8 @@ export function SimpleCanvas({ sessionActive, tutorTranscript, onStudentDrawingD
   };
 
   return (
-    <section className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,48,0.98),rgba(12,18,36,0.98))]">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4">
-        <div>
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-muted">Whiteboard</p>
-          <p className="mt-1 text-sm text-white/72">{boardStatus}</p>
-        </div>
-        {isAnalyzing && <span className="text-sm font-semibold text-electric animate-pulse">Checking...</span>}
-      </div>
-
-      <div className="relative flex-1 cursor-crosshair bg-[#f8fbff]" style={{ minHeight: "350px" }}>
+    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#0a1020]">
+      <div ref={canvasShellRef} className="relative flex-1 cursor-crosshair bg-[#f8fbff]">
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full touch-none"
@@ -256,34 +280,37 @@ export function SimpleCanvas({ sessionActive, tutorTranscript, onStudentDrawingD
         />
       </div>
 
-      <div className="border-t border-white/10 bg-[#121a33] px-4 py-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Colors</span>
+      <div className="border-t border-white/10 bg-[#0f172a] px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
           {COLORS.map((color) => (
             <button
               key={color}
               type="button"
               onClick={() => setActiveColor(color)}
-              className={`h-12 w-12 rounded-full border-4 transition ${
-                activeColor === color ? "border-white scale-110" : "border-transparent"
+              aria-label={`Use ${color} pen`}
+              className={`h-9 w-9 rounded-full border-[3px] transition ${
+                activeColor === color ? "scale-105 border-white" : "border-transparent"
               }`}
               style={{ backgroundColor: color }}
             />
           ))}
 
-          <span className="ml-3 text-xs font-bold uppercase tracking-[0.18em] text-muted">Size</span>
-          <button onClick={() => setLineWidth(2)} className={`h-12 min-w-12 rounded-full border border-white/10 px-3 text-xs font-black ${lineWidth === 2 ? "bg-electric text-white" : "bg-white/5 text-white"}`}>S</button>
-          <button onClick={() => setLineWidth(4)} className={`h-12 min-w-12 rounded-full border border-white/10 px-3 text-xs font-black ${lineWidth === 4 ? "bg-electric text-white" : "bg-white/5 text-white"}`}>M</button>
-          <button onClick={() => setLineWidth(8)} className={`h-12 min-w-12 rounded-full border border-white/10 px-3 text-xs font-black ${lineWidth === 8 ? "bg-electric text-white" : "bg-white/5 text-white"}`}>L</button>
+          <button onClick={() => setLineWidth(2)} className={`h-9 min-w-9 rounded-full border border-white/10 px-3 text-[11px] font-black ${lineWidth === 2 ? "bg-electric text-white" : "bg-white/5 text-white"}`}>S</button>
+          <button onClick={() => setLineWidth(4)} className={`h-9 min-w-9 rounded-full border border-white/10 px-3 text-[11px] font-black ${lineWidth === 4 ? "bg-electric text-white" : "bg-white/5 text-white"}`}>M</button>
+          <button onClick={() => setLineWidth(8)} className={`h-9 min-w-9 rounded-full border border-white/10 px-3 text-[11px] font-black ${lineWidth === 8 ? "bg-electric text-white" : "bg-white/5 text-white"}`}>L</button>
 
           <button
             type="button"
             onClick={handleClear}
-            className="ml-auto min-h-12 rounded-full bg-softred px-5 text-sm font-black text-white transition hover:bg-softred/90"
+            className="ml-auto h-9 rounded-full bg-softred px-4 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-softred/90"
           >
-            🗑️ Clear
+            Clear
           </button>
         </div>
+      </div>
+
+      <div className="sr-only" aria-live="polite">
+        {isAnalyzing ? "Maximus is looking at your work." : boardStatus}
       </div>
     </section>
   );
