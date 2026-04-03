@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ParentDashboard } from "@/lib/db";
+import type { ParentDashboard, SessionEvent } from "@/lib/db";
 
 type Props = {
   dashboard: ParentDashboard;
@@ -36,11 +36,34 @@ function masteryTone(mastery: number) {
   return "bg-lagoon";
 }
 
+function getTranscriptRole(event: SessionEvent) {
+  const role = typeof event.metadata?.role === "string" ? event.metadata.role.toLowerCase() : "";
+  const speaker = typeof event.metadata?.speaker === "string" ? event.metadata.speaker.toLowerCase() : "";
+
+  if (role === "student" || speaker === "student") {
+    return "student";
+  }
+
+  if (role === "tutor" || speaker === "tutor" || speaker === "assistant") {
+    return "tutor";
+  }
+
+  return null;
+}
+
 export function ParentDashboardClient({ dashboard }: Props) {
   const [expandedSessionIds, setExpandedSessionIds] = useState<Record<string, boolean>>({});
+  const [expandedTranscriptIds, setExpandedTranscriptIds] = useState<Record<string, boolean>>({});
 
   const toggleSession = (sessionId: string) => {
     setExpandedSessionIds((current) => ({
+      ...current,
+      [sessionId]: !current[sessionId],
+    }));
+  };
+
+  const toggleTranscript = (sessionId: string) => {
+    setExpandedTranscriptIds((current) => ({
       ...current,
       [sessionId]: !current[sessionId],
     }));
@@ -159,6 +182,8 @@ export function ParentDashboardClient({ dashboard }: Props) {
               <div className="mt-3 space-y-3">
                 {entry.recentSessions.map((session) => {
                   const isExpanded = Boolean(expandedSessionIds[session.id]);
+                  const isTranscriptExpanded = Boolean(expandedTranscriptIds[session.id]);
+                  const transcriptEvents = session.events.filter((event) => getTranscriptRole(event) !== null);
 
                   return (
                     <div key={session.id} className="rounded-[1.5rem] border border-slate-200 bg-[#fbfcff] p-4">
@@ -167,13 +192,22 @@ export function ParentDashboardClient({ dashboard }: Props) {
                           <p className="text-sm font-black text-slate-900">{formatDate(session.endedAt ?? session.startedAt)}</p>
                           <p className="mt-1 text-sm text-slate-500">{session.durationMinutes ?? 0} minutes</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => toggleSession(session.id)}
-                          className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-700"
-                        >
-                          {isExpanded ? "Hide details" : "Show details"}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleTranscript(session.id)}
+                            className="rounded-full bg-blue-100 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-blue-700"
+                          >
+                            {isTranscriptExpanded ? "Hide transcript" : "View transcript"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleSession(session.id)}
+                            className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-700"
+                          >
+                            {isExpanded ? "Hide details" : "Show details"}
+                          </button>
+                        </div>
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -193,6 +227,47 @@ export function ParentDashboardClient({ dashboard }: Props) {
 
                       <p className="mt-3 text-sm leading-6 text-slate-600">{session.summary ?? "Summary pending."}</p>
                       <p className="mt-2 text-sm text-slate-500">{session.performanceNotes ?? "No performance note saved."}</p>
+
+                      {isTranscriptExpanded ? (
+                        <div className="mt-4 rounded-[1.25rem] border border-blue-100 bg-white p-3">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Full transcript</p>
+                          <div className="mt-3 space-y-3">
+                            {transcriptEvents.length > 0 ? (
+                              transcriptEvents.map((event) => {
+                                const role = getTranscriptRole(event);
+                                const isStudent = role === "student";
+
+                                return (
+                                  <div
+                                    key={event.id}
+                                    className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                                      isStudent
+                                        ? "bg-slate-100 text-slate-800"
+                                        : "ml-auto bg-blue-600 text-white"
+                                    }`}
+                                  >
+                                    <p className={`font-bold ${isStudent ? "text-slate-900" : "text-white"}`}>
+                                      {isStudent ? "🎤 Student" : "🤖 Maximus"}
+                                    </p>
+                                    <p className="mt-1 whitespace-pre-wrap leading-6">
+                                      {event.content ?? "No transcript saved."}
+                                    </p>
+                                    <p
+                                      className={`mt-2 text-xs uppercase tracking-[0.14em] ${
+                                        isStudent ? "text-slate-500" : "text-blue-100"
+                                      }`}
+                                    >
+                                      {formatDate(event.timestamp)}
+                                    </p>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p className="text-sm text-slate-500">No transcript saved for this session.</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
 
                       {isExpanded ? (
                         <div className="mt-4 rounded-[1.25rem] bg-white p-3">

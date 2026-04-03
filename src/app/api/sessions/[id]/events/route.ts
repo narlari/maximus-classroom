@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionById, logSessionEvent } from "@/lib/db";
+import { getSessionById, getSessionEvents, logSessionEvent } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -32,4 +32,15 @@ export async function POST(
     }),
     { status: 201 },
   );
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: { id: string } },
+) {
+  if (!getSessionById(params.id)) {
+    return NextResponse.json({ error: "Session not found." }, { status: 404 });
+  }
+
+  return NextResponse.json(getSessionEvents(params.id));
 }

@@ -169,6 +169,7 @@ export function VoiceSession({ student }: Props) {
     }
 
     setError(null);
+    setTutorTranscript(null);
     idlePromptedRef.current = false;
     fiveMinuteWarningRef.current = false;
     costCapHandledRef.current = false;
@@ -185,11 +186,11 @@ export function VoiceSession({ student }: Props) {
         onError: setError,
         onUserTranscript: (transcript) => {
           markStudentActivity();
-          void logEvent("voice_exchange", transcript, { speaker: "student" });
+          void logEvent("voice_exchange", transcript, { role: "student", speaker: "student" });
         },
         onAssistantTranscript: (transcript) => {
           setTutorTranscript(`${Date.now()}::${transcript}`);
-          void logEvent("voice_exchange", transcript, { speaker: "assistant" });
+          void logEvent("voice_exchange", transcript, { role: "tutor", speaker: "tutor" });
         },
       });
 
@@ -216,11 +217,14 @@ export function VoiceSession({ student }: Props) {
 
   const handleEndButton = () => {
     if (!isActive) {
+      window.location.href = "/";
       return;
     }
 
     if (window.confirm("Are you sure? Your progress is saved!")) {
-      void stopSession();
+      void stopSession().then(() => {
+        window.location.href = "/";
+      });
     }
   };
 
@@ -230,6 +234,17 @@ export function VoiceSession({ student }: Props) {
     controllerRef.current?.sendTextMessage(`Whiteboard update: ${description}`);
     void logEvent("whiteboard_snapshot", description, { source: "shared_whiteboard" });
   };
+
+  useEffect(() => {
+    if (status === "speaking") {
+      controllerRef.current?.setMicMuted(true);
+      return;
+    }
+
+    if (status === "listening") {
+      controllerRef.current?.setMicMuted(false);
+    }
+  }, [status]);
 
   useEffect(() => {
     document.documentElement.classList.add("classroom-shell");
@@ -375,7 +390,7 @@ export function VoiceSession({ student }: Props) {
           <button
             type="button"
             onClick={handleEndButton}
-            disabled={!isActive || isEnding}
+            disabled={isEnding}
             aria-label="End session"
             className={`flex h-12 w-12 items-center justify-center rounded-full bg-[#ef4444] text-xl text-white shadow-[0_12px_24px_rgba(0,0,0,0.26)] transition ${
               !isActive || isEnding ? "cursor-not-allowed opacity-45" : "active:scale-95"

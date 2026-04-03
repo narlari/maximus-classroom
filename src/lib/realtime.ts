@@ -10,6 +10,7 @@ export type RealtimeController = {
   stop: () => void;
   sendTextMessage: (text: string) => void;
   speakMessage: (text: string) => void;
+  setMicMuted: (muted: boolean) => void;
 };
 
 type ConnectOptions = {
@@ -59,6 +60,7 @@ export async function connectRealtimeSession(
   audioElement.autoplay = true;
   let peerConnection: RTCPeerConnection | null = null;
   let mediaStream: MediaStream | null = null;
+  let audioTrack: MediaStreamTrack | null = null;
   let dataChannel: RTCDataChannel | null = null;
   let lastAssistantTranscript = "";
 
@@ -91,6 +93,7 @@ export async function connectRealtimeSession(
         autoGainControl: true,
       },
     });
+    audioTrack = mediaStream.getAudioTracks()[0] ?? null;
 
     mediaStream.getTracks().forEach((track) => {
       peerConnection?.addTrack(track, mediaStream as MediaStream);
@@ -244,7 +247,7 @@ export async function connectRealtimeSession(
         response: {
           modalities: ["audio", "text"],
           instructions:
-            "Greet the student warmly as Maximus, introduce yourself as a math tutor, and ask what they want to work on today.",
+            "Hey! Greet the student with high energy as Maximus. Be fun and excited. Say something like 'Yooo what's up! I'm Maximus, your math tutor! Ready to do some awesome math today?' Keep it short and hype. SPEAK IN ENGLISH.",
         },
       }),
     );
@@ -303,6 +306,11 @@ export async function connectRealtimeSession(
         );
       },
       speakMessage,
+      setMicMuted: (muted: boolean) => {
+        if (audioTrack) {
+          audioTrack.enabled = !muted;
+        }
+      },
     };
   } catch (error) {
     cleanupConnection({ peerConnection, mediaStream, dataChannel, audioElement });
