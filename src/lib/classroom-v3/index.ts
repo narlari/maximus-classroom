@@ -16,3 +16,6 @@ export {
 } from "./board-renderer";
 
 export { speakText } from './tts';
+
+export { evaluateStudentWork } from './vision-eval';
+export type { EvaluationResult } from './vision-eval';
