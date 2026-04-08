@@ -92,11 +92,23 @@ export type StudentBoardStroke = {
   text?: string;
 };
 
+export type StudentBoardSnapshot = {
+  capturedAt?: string;
+  strokes?: StudentBoardStroke[];
+  imageDataUrl?: string;
+  dataUrl?: string;
+  width?: number;
+  height?: number;
+  mimeType?: string;
+  strokeCount?: number;
+};
+
 export type StudentBoardEvidence = {
   type: "board";
   submissionId: string;
   capturedAt: string;
   strokes: StudentBoardStroke[];
+  snapshot?: StudentBoardSnapshot;
 };
 
 export type StudentCombinedEvidence = {
