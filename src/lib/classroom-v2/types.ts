@@ -75,13 +75,30 @@ export type BoardTarget =
       height: number;
     };
 
+export type StudentVoiceTranscriptSegment = {
+  text: string;
+  startMs?: number;
+  endMs?: number;
+  confidence?: number;
+};
+
 export type StudentVoiceEvidence = {
   type: "voice";
   utteranceId: string;
   transcript: string;
+  normalizedTranscript?: string;
   startedAt: string;
   endedAt: string;
   confidence?: number;
+  segments?: StudentVoiceTranscriptSegment[];
+  reviewContext?: {
+    lessonId: string;
+    turnId: string;
+    state: string;
+    expectsStudentEvidence: boolean;
+    prompt: string | null | undefined;
+    actions: TutorAction[];
+  };
 };
 
 export type StudentBoardStroke = {
@@ -92,11 +109,31 @@ export type StudentBoardStroke = {
   text?: string;
 };
 
+export type StudentBoardSnapshot = {
+  capturedAt?: string;
+  strokes?: StudentBoardStroke[];
+  imageDataUrl?: string;
+  dataUrl?: string;
+  width?: number;
+  height?: number;
+  mimeType?: string;
+  strokeCount?: number;
+};
+
 export type StudentBoardEvidence = {
   type: "board";
   submissionId: string;
   capturedAt: string;
   strokes: StudentBoardStroke[];
+  snapshot?: StudentBoardSnapshot;
+  reviewContext?: {
+    lessonId: string;
+    turnId: string;
+    state: string;
+    expectsStudentEvidence: boolean;
+    prompt: string | null | undefined;
+    actions: TutorAction[];
+  };
 };
 
 export type StudentCombinedEvidence = {
@@ -114,6 +151,15 @@ export type TutorTurnPlan = {
   turnId: string;
   actions: TutorAction[];
   expectsStudentEvidence: boolean;
+};
+
+export type TutorReviewContext = {
+  lessonId: string;
+  turnId: string;
+  state: ClassroomState;
+  expectsStudentEvidence: boolean;
+  prompt: string | null | undefined;
+  actions: TutorAction[];
 };
 
 export type ClassroomSession = {

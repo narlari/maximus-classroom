@@ -31,13 +31,21 @@ export default function LessonControls({
 
   return (
     <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
-      {phase === 'idle' && !loading && (
-        <button
-          onClick={onStartLesson}
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg text-lg font-medium hover:bg-blue-700 transition-colors"
-        >
-          Start Lesson
-        </button>
+      {(phase === 'idle' || phase === 'complete') && !loading && (
+        <div className="text-center">
+          {phase === 'complete' && (
+            <>
+              <p className="text-2xl font-bold text-green-700 mb-2">Lesson Complete!</p>
+              <p className="text-gray-600 mb-4">Great work today!</p>
+            </>
+          )}
+          <button
+            onClick={onStartLesson}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg text-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            {phase === 'complete' ? 'Start New Lesson' : 'Start Lesson'}
+          </button>
+        </div>
       )}
 
       {loading && (
@@ -81,7 +89,7 @@ export default function LessonControls({
               </button>
             )}
 
-            {(phase === 'reviewing' || (phase === 'teaching' && !evaluation)) && !evaluating && (
+            {phase === 'reviewing' && !evaluating && (
               <button
                 onClick={onNextProblem}
                 className={`px-5 py-2 text-white rounded-lg font-medium transition-colors ${
@@ -97,8 +105,11 @@ export default function LessonControls({
         </>
       )}
 
-      {phase === 'ended' && (
-        <p className="text-xl text-green-700 font-medium">Lesson complete!</p>
+      {phase === 'generating' && !loading && (
+        <div className="flex items-center gap-3 text-gray-600">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+          <span className="text-lg">Generating lesson...</span>
+        </div>
       )}
     </div>
   )

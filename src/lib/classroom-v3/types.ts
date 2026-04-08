@@ -3,11 +3,12 @@
 /** Phase of the classroom session */
 export type ClassroomPhase =
   | "idle"
+  | "generating"
   | "teaching"
   | "student_turn"
   | "evaluating"
   | "reviewing"
-  | "ended";
+  | "complete";
 
 /** How the student should answer */
 export type ExpectedAnswerType = "drawing" | "number" | "expression";

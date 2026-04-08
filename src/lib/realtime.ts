@@ -6,6 +6,13 @@ export type SessionStatus =
   | "speaking"
   | "error";
 
+export type BrowserStudentTranscriptEvent = {
+  transcript: string;
+  receivedAt: string;
+  eventType?: string;
+  isFinal?: boolean;
+};
+
 export type RealtimeController = {
   stop: () => void;
   sendTextMessage: (text: string) => void;

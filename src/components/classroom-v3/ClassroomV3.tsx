@@ -4,7 +4,7 @@ import { useRef, useState, useCallback } from 'react'
 import type { Editor } from 'tldraw'
 import type { LessonPlan, ClassroomPhase } from '@/lib/classroom-v3'
 import type { EvaluationResult } from '@/lib/classroom-v3/vision-eval'
-import { renderProblemToBoard, clearTeacherLayer } from '@/lib/classroom-v3'
+import { renderProblemToBoard, clearTeacherLayer, clearStudentLayer } from '@/lib/classroom-v3'
 import { speakText } from '@/lib/classroom-v3/tts'
 import ClassroomWhiteboard from './ClassroomWhiteboard'
 import LessonControls from './LessonControls'
@@ -33,6 +33,7 @@ export default function ClassroomV3() {
 
   const handleStartLesson = useCallback(async () => {
     setLoading(true)
+    setPhase('generating')
     try {
       const res = await fetch('/api/lesson/generate', {
         method: 'POST',
@@ -45,12 +46,16 @@ export default function ClassroomV3() {
       setCurrentProblemIndex(0)
       setEvaluation(null)
       if (editorRef.current) {
+        clearTeacherLayer(editorRef.current)
+        clearStudentLayer(editorRef.current)
         renderProblemToBoard(editorRef.current, lessonPlan.problems[0])
       }
-      speakText(`Let's work on ${lessonPlan.problems[0].problemText}`)
+      speakText(lessonPlan.problems[0].spokenPrompt || `Let's work on ${lessonPlan.problems[0].problemText}`)
       setPhase('teaching')
+      setTimeout(() => setPhase('student_turn'), 2000)
     } catch (err) {
       console.error('Failed to start lesson:', err)
+      setPhase('idle')
     } finally {
       setLoading(false)
     }
@@ -60,15 +65,19 @@ export default function ClassroomV3() {
     if (!lesson || !editorRef.current) return
     const nextIndex = currentProblemIndex + 1
     if (nextIndex >= lesson.problems.length) {
-      speakText("Amazing work! Lesson complete!")
-      setPhase('ended')
+      speakText("Amazing work! You finished the whole lesson! Great job today!")
+      setPhase('complete')
       return
     }
     clearTeacherLayer(editorRef.current)
+    clearStudentLayer(editorRef.current)
     setCurrentProblemIndex(nextIndex)
     setEvaluation(null)
     renderProblemToBoard(editorRef.current, lesson.problems[nextIndex])
-    speakText(`Great! Now let's try: ${lesson.problems[nextIndex].problemText}`)
+    const problem = lesson.problems[nextIndex]
+    speakText(problem.spokenPrompt || `Great! Now let's try: ${problem.problemText}`)
+    setPhase('teaching')
+    setTimeout(() => setPhase('student_turn'), 2000)
   }, [lesson, currentProblemIndex])
 
   const handleCheckWork = useCallback(async () => {
@@ -80,6 +89,7 @@ export default function ClassroomV3() {
 
     try {
       const screenshot = await captureScreenshot(editorRef.current)
+      console.log('[screenshot] prefix:', screenshot.substring(0, 30))
       const res = await fetch('/api/lesson/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,7 +103,21 @@ export default function ClassroomV3() {
       const result: EvaluationResult = await res.json()
       setEvaluation(result)
       speakText(result.feedback)
-      setPhase(result.correct ? 'reviewing' : 'student_turn')
+
+      if (result.correct) {
+        setPhase('reviewing')
+        // Auto-advance after TTS has time to play
+        setTimeout(() => handleNextProblem(), 2000)
+      } else {
+        // Wrong answer: speak hint, clear student layer for retry
+        if (result.hint) {
+          setTimeout(() => speakText(result.hint!), 1500)
+        }
+        if (editorRef.current) {
+          clearStudentLayer(editorRef.current)
+        }
+        setPhase('student_turn')
+      }
     } catch (err) {
       console.error('Check work failed:', err)
       setEvaluation({
@@ -105,7 +129,7 @@ export default function ClassroomV3() {
     } finally {
       setEvaluating(false)
     }
-  }, [lesson, currentProblemIndex])
+  }, [lesson, currentProblemIndex, handleNextProblem])
 
   return (
     <div className="h-screen flex flex-col">
