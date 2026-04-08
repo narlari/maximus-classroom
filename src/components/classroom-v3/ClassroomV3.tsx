@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from 'react'
 import type { Editor } from 'tldraw'
 import type { LessonPlan, ClassroomPhase } from '@/lib/classroom-v3'
 import { renderProblemToBoard, clearTeacherLayer } from '@/lib/classroom-v3'
+import { speakText } from '@/lib/classroom-v3/tts'
 import ClassroomWhiteboard from './ClassroomWhiteboard'
 import LessonControls from './LessonControls'
 
@@ -33,6 +34,7 @@ export default function ClassroomV3() {
       if (editorRef.current) {
         renderProblemToBoard(editorRef.current, lessonPlan.problems[0])
       }
+      speakText(`Let's work on ${lessonPlan.problems[0].problemText}`)
       setPhase('teaching')
     } catch (err) {
       console.error('Failed to start lesson:', err)
@@ -45,12 +47,14 @@ export default function ClassroomV3() {
     if (!lesson || !editorRef.current) return
     const nextIndex = currentProblemIndex + 1
     if (nextIndex >= lesson.problems.length) {
+      speakText("Amazing work! Lesson complete!")
       setPhase('ended')
       return
     }
     clearTeacherLayer(editorRef.current)
     setCurrentProblemIndex(nextIndex)
     renderProblemToBoard(editorRef.current, lesson.problems[nextIndex])
+    speakText(`Great! Now let's try: ${lesson.problems[nextIndex].problemText}`)
   }, [lesson, currentProblemIndex])
 
   return (

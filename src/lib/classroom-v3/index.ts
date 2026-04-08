@@ -14,3 +14,5 @@ export {
   clearTeacherLayer,
   clearStudentLayer,
 } from "./board-renderer";
+
+export { speakText } from './tts';
