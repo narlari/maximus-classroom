@@ -18,8 +18,22 @@ async function captureScreenshot(editor: Editor): Promise<string> {
   return result.url
 }
 
+async function logSessionEvent(sessionId: string | null, type: string, data: object) {
+  if (!sessionId) return
+  try {
+    await fetch('/api/classroom/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, type, data }),
+    })
+  } catch (err) {
+    console.error('Failed to log event:', err)
+  }
+}
+
 export default function ClassroomV3() {
   const editorRef = useRef<Editor | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
   const [lesson, setLesson] = useState<LessonPlan | null>(null)
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0)
   const [phase, setPhase] = useState<ClassroomPhase>('idle')
@@ -42,9 +56,29 @@ export default function ClassroomV3() {
       })
       if (!res.ok) throw new Error('Failed to generate lesson')
       const lessonPlan: LessonPlan = await res.json()
+
+      // Create a session
+      const sessionRes = await fetch('/api/classroom/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: 'addition and subtraction', gradeLevel: 4 }),
+      })
+      const { sessionId } = await sessionRes.json()
+      sessionIdRef.current = sessionId
+
       setLesson(lessonPlan)
       setCurrentProblemIndex(0)
       setEvaluation(null)
+
+      logSessionEvent(sessionId, 'lesson_started', {
+        topic: lessonPlan.topic,
+        gradeLevel: lessonPlan.gradeLevel,
+        lessonPlan,
+      })
+      logSessionEvent(sessionId, 'problem_shown', {
+        problemIndex: 0,
+        problemText: lessonPlan.problems[0].problemText,
+      })
       if (editorRef.current) {
         clearTeacherLayer(editorRef.current)
         clearStudentLayer(editorRef.current)
@@ -66,6 +100,7 @@ export default function ClassroomV3() {
     const nextIndex = currentProblemIndex + 1
     if (nextIndex >= lesson.problems.length) {
       speakText("Amazing work! You finished the whole lesson! Great job today!")
+      logSessionEvent(sessionIdRef.current, 'lesson_complete', {})
       setPhase('complete')
       return
     }
@@ -74,6 +109,10 @@ export default function ClassroomV3() {
     setCurrentProblemIndex(nextIndex)
     setEvaluation(null)
     renderProblemToBoard(editorRef.current, lesson.problems[nextIndex])
+    logSessionEvent(sessionIdRef.current, 'problem_shown', {
+      problemIndex: nextIndex,
+      problemText: lesson.problems[nextIndex].problemText,
+    })
     const problem = lesson.problems[nextIndex]
     speakText(problem.spokenPrompt || `Great! Now let's try: ${problem.problemText}`)
     setPhase('teaching')
@@ -90,6 +129,10 @@ export default function ClassroomV3() {
     try {
       const screenshot = await captureScreenshot(editorRef.current)
       console.log('[screenshot] prefix:', screenshot.substring(0, 30))
+      logSessionEvent(sessionIdRef.current, 'student_submitted', {
+        problemIndex: currentProblemIndex,
+        screenshot: screenshot || '',
+      })
       const res = await fetch('/api/lesson/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,6 +145,11 @@ export default function ClassroomV3() {
       if (!res.ok) throw new Error('Evaluation request failed')
       const result: EvaluationResult = await res.json()
       setEvaluation(result)
+      logSessionEvent(sessionIdRef.current, 'evaluation_result', {
+        problemIndex: currentProblemIndex,
+        correct: result.correct,
+        feedback: result.feedback,
+      })
       speakText(result.feedback)
 
       if (result.correct) {
